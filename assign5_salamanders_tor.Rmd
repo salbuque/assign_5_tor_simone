@@ -1,0 +1,158 @@
+---
+title: "Untitled"
+author: "Tor Fibiger"
+date: "12/1/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Attach Packages
+
+```{r}
+
+library(tidyverse)
+library(janitor)
+library(effsize)
+library(kableExtra)
+library(dplyr)
+library(ggridges)
+library(viridis)
+
+```
+
+#read in mack_creek_vertebrates
+
+```{r}
+mack_creek <- read.csv("mack_creek_vertebrates (1).csv") %>% 
+  janitor::clean_names()
+```
+
+
+
+```{r}
+results_a_prep_1 <- mack_creek %>% 
+  filter(species == "DITE", section == "CC") %>% 
+  group_by(year) %>% 
+  summarize(total_count = n())
+
+results_a_prep_2 <- mack_creek %>% 
+  filter(species == "DITE", section == "OG") %>% 
+  group_by(year) %>% 
+  summarize(total_count = n())
+```
+
+```{r}
+ggplot(results_a_prep_1, aes(x = year, y = total_count)) +
+  geom_line(color = "red") +
+  geom_line(data = results_a_prep_2, aes(x = year, y = total_count), color = "dark green") +
+  theme_minimal() +
+  scale_x_continuous(expand = c(0,0),
+                     limits = c(1993, 2018),
+                     breaks = seq(1993, 2017, by = 2)) +
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(0, 400),
+                     breaks = seq(0, 500, by = 100)) +
+  labs(title = "Annual Salamander Counts in Clear Cut and Old Growth Sections of Mack Creek", x = "Year", y = "Salamander Count") +
+annotate(geom = "text",
+           x = 2003,
+           y = 100,
+           label = "Clear Cut",
+           color = "red",
+           size = 8) +
+  annotate(geom = "text",
+           x = 1998,
+           y = 250,
+           label = "Old Growth",
+           color = "dark green",
+           size = 8)
+  
+```
+
+### Results B Table of 2017 salamander counts by channel classification (pool, cascades and side-channel) 
+in old growth (OG) and clear cut (CC) sections of Mack Creek.
+```{r}
+sal_counts <- mack_creek %>% 
+  filter(year %in% c("2017")) %>% # for 2017 observations only
+    filter(section %in% c("CC", "OG")) %>% # only for clear cut & old growth forest
+    filter(species %in% c("DITE")) %>% # only salamanders
+    filter(unittype %in% c("SC", "P", "C")) %>% # only for pool, cascade, side channel 
+  count(unittype, section) %>% 
+  pivot_wider(names_from = section, values_from = n)
+```
+
+```{r}
+sal_count_table <-  sal_counts %>% 
+  kable(col.names = c("Channel Type (pool, cascades and side-channel)", 
+                     "Clear Cut Forest", 
+                     "Old Growth Forest")
+       ) %>% 
+  kable_styling(bootstrap_options = "striped", 
+                full_width = F,
+                position = "left"
+                ) %>% 
+  add_header_above(c("Salamanders observed along Mack Creek 2017" = 3))
+```
+### Results C: Using the 2017 counts found above,
+answer: is there a significant difference in where in the channel Pacific giant salamanders are located (pool, cascade or side channel) between the two sections (old growth and clear cut)?
+  
+```{r}
+chi_counts <- sal_counts %>% 
+  select(-unittype)
+```
+
+```{r}
+chi_counts
+
+my_sal_chi <- chisq.test(chi_counts)
+my_sal_chi
+```
+
+
+#Results D
+
+```{r}
+results_d_prep <- mack_creek %>% 
+  filter(species == "DITE", year == "2017") %>% 
+  select(section, weight) %>% 
+  mutate(new_section = case_when(
+         section == "OG" ~ "Old Growth",
+         section == "CC" ~ "Clear Cut"))
+
+og_weight <- results_d_prep %>% 
+  filter(section == "OG")
+
+cc_weight <- results_d_prep %>% 
+  filter(section == "CC")
+
+# Calculate mean weights (old growth vs. clear cut)
+mean_weight_cc <- mean(cc_weight$weight, na.rm = TRUE)
+mean_weight_og <- mean(og_weight$weight, na.rm = TRUE)
+
+# Calculate mean weight standard deviation (old growth vs. clear cut)
+sd_weight_cc <- sd(cc_weight$weight, na.rm = TRUE)
+sd_weight_og <- sd(og_weight$weight, na.rm = TRUE)
+
+# Calculate sample size (old growth vs. clear cut)
+sample_size_cc <- count(cc_weight, na.rm = TRUE)
+sample_size_og <- count(og_weight, na.rm = TRUE)
+
+ttest_og_weight <- og_weight %>% 
+  pull(weight)
+
+ttest_cc_weight <- cc_weight %>% 
+  pull(weight)
+
+t_test <- t.test(ttest_cc_weight, ttest_og_weight)
+
+weight_effect_size <- cohen.d(ttest_cc_weight, ttest_og_weight, na.rm = TRUE)
+
+ggplot(data = results_d_prep, aes(x = weight)) +
+  geom_histogram(fill = "black") +
+  facet_wrap(~new_section) +
+  theme_minimal() +
+  labs(title = "Salamander Weight by Location", x = "Salamander Weight (grams)", y = "Count")
+```
+
